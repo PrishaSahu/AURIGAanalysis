@@ -1,0 +1,86 @@
+
+//Developing graphs comparing observed data on dwarf galaxies (primarily looking at mass and radii) to those of simulated by the Auriga simulations 
+
+"""Load a subhalo catalogue"""
+attrstoload = ['SubhaloMass', 'SubhaloPos', 'SubhaloVel', 'SubhaloMassType', 'Group_R_Crit200', 'SubhaloHalfmassRadType']
+subobj = ap.subhalos.subfind(snap_num, directory=outputdir, loadlist=attrstoload)
+
+subobj.__dict__
+
+main_pos = subobj.data['SubhaloPos'][0]
+print('main_pos=',main_pos)
+distance = np.sqrt( np.sum( (subobj.data['SubhaloPos']-main_pos)**2, axis=1) )
+masses = subobj.data['SubhaloMassType'][:,1]
+smasses = subobj.data['SubhaloMassType'][:,4]
+gmasses = subobj.data['SubhaloMassType'][:,0]
+r200 = subobj.data['Group_R_Crit200'][0]
+
+radii = subobj.data['SubhaloHalfmassRadType'][:,4] * 0.6777 * 1e6
+ii, = np.where( (distance <= r200) & (distance > 0) & (smasses > 0.) )
+
+print(radii[ii], smasses[ii]*1e4)
+
+plt.semilogx(smasses[ii]*10**10,radii[ii]*10**3,ls='none',marker='o')
+plt.xlabel('Mass [M_sun]')
+plt.ylabel('Radius [kpc]')
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Your data (M0.3 Solar Masses)
+smasses = [1.333e+03, 1.3365e+03, 1.3367e+03, 1.3350e+03,  ]
+radii = [710, 875, 475, 170, 155, 260, 635, 110, 160, 585, 310, 460, 210, 185, 445, 630, 230, 215, 700, 335, 160, 110, 200, 180, 125, 260, 95, 390, 280, 4e8, 2675, 1105, 2899, 2340, 3109]
+
+# Dummy error values (for demonstration purposes)
+mass_errors = [m * 0.1 for m in smasses]  # 10% error
+radius_errors = [r * 0.05 for r in radii]  # 5% error
+
+# Snapshot data
+smasses_snapshots = [2.8276890e+03, 1.5832925e+02, 7.5756140e+00, 3.9751987e+01, 4.9976473e+00, 1.2033095e+00, 3.1677608e+00, 1.2359314e-01, 2.2126622e-01, 1.7377841e-01, 5.3051156e-01, 1.8531109e-01, 1.9050929e-01]
+radii_snapshots = [3382.5327, 1482.8136, 1220.9526, 1344.7333, 1532.643, 1310.3116, 1114.1295, 471.54446, 742.6568, 1304.8506, 814.1914, 607.00055,1497.9811]
+
+# Dummy errors for snapshots
+mass_snap_errors = [m * 0.1 for m in smasses_snapshots]
+radius_snap_errors = [r * 0.05 for r in radii_snapshots]
+
+# Create the plot
+fig, ax1 = plt.subplots(figsize=(6, 4.5), tight_layout=True)
+
+# Main dataset with error bars
+ax1.errorbar(radii, smasses, xerr=radius_errors, yerr=mass_errors,
+             fmt='o', color='blue', ecolor='lightblue', elinewidth=1, capsize=3, label='Observations')
+
+# Snapshot data with error bars
+ax1.errorbar(radii_snapshots, smasses_snapshots, xerr=radius_snap_errors, yerr=mass_snap_errors,
+             fmt='o', color='red', ecolor='salmon', elinewidth=1, capsize=3, label='Simulations')
+
+# Log scale and labels
+ax1.set_xscale('log')
+ax1.set_yscale('log')
+ax1.set_xlabel("Radius (log scale)")
+ax1.set_ylabel("Mass (log scale)")
+ax1.set_title("Mass vs Radius (Log-Log Scale)")
+ax1.grid(True, which="both", ls="--", linewidth=0.5)
+ax1.legend()
+
+plt.show()
+
+fig, ax1 = plt.subplots(1, 1, figsize=(6, 4.5), tight_layout=True)
+ii, = np.where( (distance <= r200) & (distance > 0) )
+print('Total number of subhalos=',len(ii))
+ax1.scatter( distance[ii], np.log10(masses[ii]*1e10) )
+fig.show()
+
+fig, ax1 = plt.subplots(1, 1, figsize=(6, 4.5), tight_layout=True)
+ii, = np.where( (distance <= r200) & (distance > 0) )
+print('Total number of subhalos=',len(ii))
+ax1.scatter( distance[ii], np.log10(masses[ii]*1e10) )
+"""Select ones with stars only"""
+ii, = np.where( (distance <= r200) & (distance > 0) & (smasses > 0.) )
+print('Number of luminous subhalos=',len(ii))
+ax1.scatter( distance[ii], np.log10(masses[ii]*1e10) )
+"""Select ones with gas only"""
+ii, = np.where( (distance <= r200) & (distance > 0) & (gmasses > 0.) )
+print('Number of luminous subhalos=',len(ii))
+ax1.scatter( distance[ii], np.log10(gmasses[ii]*1e10) )
+fig.show()
