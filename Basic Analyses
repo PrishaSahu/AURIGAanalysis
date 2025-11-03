@@ -1,0 +1,245 @@
+import os
+print(os.getcwd())
+
+directory = '/Users/prishasahu/auriga_analysis/'
+
+import glob
+path = glob.glob(directory+'/*')
+print('path',path)
+
+import auriga_public as ap
+import numpy as np
+
+"""
+class load_snapshot()
+
+    Parameters:
+        snap_num:     int
+                      number of the snapshot to be analysed
+        partType:     int
+                      the particle type to be loaded from the snapshot (0: gas; 1: DM; 4: stars & winds; 5: BHs)
+        loadlist:     list, optional
+                      A list of data attributes to load, for examples, ['Masses', 'Coordinates', 'Velocities']. If False, everything will
+                      be loaded. Default is False.
+        snappath:     str
+                      directory path to the snapshot data. Default is '.'
+        applytransformationfacs:      boolean
+                                      Default is True. If True, cosmolofical transformation factors will be applied to data fields.
+
+
+    Returns:
+        Snapshot class object containing particle data dictionaries, header information...
+
+"""
+
+"""
+load_snapshot_header()
+      Function:     To read the header information of the snapshot file(s), such as numer of particles/cells, and cosmological parameters.
+
+      Parameters:
+          fileid:   int
+                    the snapshot "chunk" number to be read. Snapshots are split into several chunks, which are read sequentially in this method.
+
+
+load_snapshot_data()
+      Function:     To read the particle/cell data foudn in the snapshot file(s).
+
+      Parameters:
+          ptype:   int
+                   particle type to be read (given by class input)
+
+          loadlist:     list
+
+set_transformation_factors()
+      Function: Set the cosmological transformation factors for data attributes.
+
+apply_transformation_factors()
+      Function: Apply the transformation of data attributes using the factors from set_transformation_factors()
+
+"""
+
+import auriga_public as ap
+
+snap_num = 127
+partType = 4
+attrstoload = ['Coordinates', 'Velocities', 'GFM_StellarFormationTime',
+               'GFM_InitialMass', 'Masses', 'ParticleIDs', 'Potential']
+
+outputdir = '/Users/prishasahu/Desktop/auriga_analysis/snapshots/'  # parent directory of snapdir_127
+
+snapobj = ap.snapshot.load_snapshot(
+    snap_num,
+    partType,
+    loadlist=attrstoload,
+    snappath=outputdir,  # THIS is the parent of the snapdir_127 folder
+    verbose=False
+)
+
+"""
+class subfind()
+    Parameters:
+        snap_num:     int
+                      number of the snapshot to be analysed
+        directory:    str
+                      directory path to the snapshot data. Default is '.'
+        loadlist:     list, optional
+                      A list of data attributes to load, for examples, ['SubhaloMass', 'SubhaloPos', 'GroupVel']. If False, everything will
+                      be loaded. Default is False.
+
+    Returns:
+        Subhalo/group catalogue class object containing data dictionaries, header information...
+
+"""
+
+subobj = ap.subhalos.subfind(snap_num, directory=outputdir, loadlist=['SubhaloPos', 'Group_R_Crit200'])
+
+"""
+def GetLookbackTimeFromScaleFactor_Flat()
+      Parameters:
+          a:            array_like
+                        cosmological scale factor of PartType4 particles or the scale factor of a given snapshot [spans from 0 to 1]
+          hubbleparam:  float
+                        value of the Hubble parameter used in the simulation (value found in snapshot/group data header). Default: None
+          OmegaMatter:  float
+                        value of the matter density used in the simulation (value found in snapshot/group data header). Default: None
+          OmegaLambda:  float
+                        value of the cosmological consant used in the simulation (value found in snapshot/group data header). Default: None
+          HubbleConst:  float
+                        value of Hubble's constant factor. Default: 100
+
+      Returns:          array_like
+                        an array of lookback times in units of Gyr
+
+def CentreOnHalo()
+      Parameters:
+          snapobj:      snapshot object
+          center:       array_like
+                        coordinates on which to centre the particle/cell data
+
+      Returns:          snapshot object
+
+def remove_bulk_velocity()
+      Parameters:
+          snapobj:      snapshot object
+          idx:          array_like of ints (optional)
+                        indices of particles to be used to calculate the bulk velocity. Default is none
+          radialcut:    float
+                        if idx=False, select particles inside radialcut to calculate the bulk velocity
+
+      Returns:          array_like
+                        The 3-dimensional bulk velocity
+
+def r()
+      Parameters:
+          snapobj:      snapshot object
+          center:       array_like
+                        coordinates on which to centre the particle/cell data. Default is False.
+
+      Returns:          array_like
+                        array of 3-dimensional radii of particles/cells
+
+def apply_mask()
+      Function:         Remove wind particles and/or make spatial cut on data attribute of a snapshot object
+      Parameters:
+          snapobj:      snapshot object
+          stars:        boolean
+                        If true, remove wind particles from snapshot data. Default is False.
+          radialcut:    float
+                        If not None, remove star/wind particles outside of specified radialcut value. Default is None.
+
+      Returns:          snapshot object
+
+"""
+
+"""Centre the particles/cells on the most massive subhalo (the main galaxy)"""
+snapobj = ap.util.CentreOnHalo(snapobj, subobj.data['SubhaloPos'][0])
+
+snapobj.__dict__
+
+"""Remove bulk velocity"""
+bulk_velocity = ap.util.remove_bulk_velocity(snapobj, idx=None, radialcut=0.1*subobj.data['Group_R_Crit200'][0])
+
+snapobj = ap.util.apply_mask(snapobj, stars=True, radialcut=subobj.data['Group_R_Crit200'][0])
+
+ages = ap.util.GetLookbackTimeFromScaleFactor_Flat(snapobj.data['GFM_StellarFormationTime'], snapobj.hubbleparam, snapobj.omega0, snapobj.omegalambda)
+
+print('stellar ages=',ages)
+
+%matplotlib inline
+import matplotlib
+import matplotlib.pyplot as plt
+
+plt.hist(ages, bins=40, range=[0, 14], weights=snapobj.data['GFM_InitialMass']/(14/40)*1e10/1e9)
+plt.xlabel('$\\rm age $')
+plt.ylabel('$\\rm{sfr \, [M_{\odot}yr^{-1}]}$')
+plt.show()
+
+n, xedges, yedges = np.histogram2d(snapobj.data['Coordinates'][:,2], snapobj.data['Coordinates'][:,1], bins=(500,500), range=[[-0.05, 0.05],[-0.05, 0.05]])
+xbin = 0.5 * (xedges[:-1] + xedges[1:])
+ybin = 0.5 * (yedges[:-1] + yedges[1:])
+xc, yc = np.meshgrid(xbin, ybin)
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9, 4.5), tight_layout=True)
+ax1.set_aspect(1)
+ax1.contourf( xc, yc, np.log10(n.T), cmap='magma')
+n, xedges, yedges = np.histogram2d(snapobj.data['Coordinates'][:,2], snapobj.data['Coordinates'][:,0], bins=(500,500), range=[[-0.05, 0.05],[-0.05, 0.05]])
+ax2.contourf( xc, yc, np.log10(n.T), cmap='magma')
+fig.show()
+
+"""
+def get_principal_axis()
+      Parameters:
+          snapobj:      snapshot object
+          idx:          array_like of ints
+                        an array of ParticleIDs to be used in the calculation of the eigenvectors of the inertia tensor
+          Ldir:         array_like
+                        unit vector of the spin axis of star particles
+      Returns:          xdir, ydir, zdir
+                        Eigenvectors of the inertia tensor: xdir eigenvector with largest eigenvalue (in direction of spin axis).
+
+def rotateto()
+      Function: apply rotation to particle/cell data fields using the rotation matrix constructed from input parameters
+
+      Parameters:
+          snapobj:      snapshot object
+          dir:          list or array_like
+                        unit vector used in rotation matrix
+          dir2, dir3:   as above
+
+def align_galaxy()
+      Function: apply the routines in the above methods with a single call to this method to do the default rotation type
+      Parameters:
+          snapobj:      snapshot object
+          idx:          array_like of ints
+                        an array of ParticleIDs to be used in the calculation of the eigenvectors of the inertia tensor.
+                        Default is None
+          radialcut:    the radius inside which we select star particles to get the eigenvectors.
+                        Default: 0.01 (Mpc)
+
+"""
+
+# To calculate it manually (flexibility to make different selection, i.e., radial cuts, gas instead...):
+"""
+istars, = np.where( (star_radius < 0.1*subobj.data['Group_R_Crit200'][0]) )
+L = np.cross( snapobj.data['Coordinates'][istars,:], (snapobj.data['Velocities'][istars,:] * snapobj.data['Masses'][istars,None]) )
+Ltot = L.sum( axis=0 )
+Ldir = Ltot / np.sqrt( (Ltot**2).sum() )
+print('Calculated stellar angular momentum unit vector: ',Ldir)
+xdir, ydir, zdir = ap.util.get_principal_axis( snapobj, istars, L=Ldir )
+print('Found eigenvector of inertia tensor aligned closest to angular momentum unit vector of stars.')
+ap.util.rotateto(snapobj, xdir, dir2=ydir, dir3=zdir)
+"""
+# or do the default rotation in util.py
+ap.util.align_galaxy( snapobj, idx=None, radialcut=0.1*subobj.data['Group_R_Crit200'][0] )
+print('Applied rotation matrix. Proceeding to plot XYZ projections...')
+
+n, xedges, yedges = np.histogram2d(snapobj.data['Coordinates'][:,2], snapobj.data['Coordinates'][:,1], bins=(500,500), range=[[-0.05, 0.05],[-0.05, 0.05]])
+xbin = 0.5 * (xedges[:-1] + xedges[1:])
+ybin = 0.5 * (yedges[:-1] + yedges[1:])
+xc, yc = np.meshgrid(xbin, ybin)
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9, 4.5), tight_layout=True)
+ax1.set_aspect(1)
+ax1.contourf( xc, yc, np.log10(n.T), cmap='magma')
+n, xedges, yedges = np.histogram2d(snapobj.data['Coordinates'][:,2], snapobj.data['Coordinates'][:,0], bins=(500,500), range=[[-0.05, 0.05],[-0.05, 0.05]])
+ax2.contourf( xc, yc, np.log10(n.T), cmap='magma')
+fig.show()
+
